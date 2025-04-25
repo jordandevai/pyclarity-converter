@@ -25,29 +25,35 @@ PyClarity Converter is designed to transform the experience of writing Clarity s
 - **Open-Source Excellence**: Follow best practices for maintainability, extensibility, and community contributions.
 
 ## Current State
-As of April 25, 2023, PyClarity Converter is a functional prototype with the following capabilities:
+As of our latest update, PyClarity Converter now supports:
 
-- **UI/UX**:
-  - Dual-pane editor (Python-like input, Clarity output) using CodeMirror for syntax highlighting.
-  - Real-time conversion as you type.
-  - Dark/light theme switcher for accessibility.
-  - Sample code loader for quick prototyping.
-  - Error console with success/error feedback.
-- **Supported Syntax**:
-  - Constants: `MAX_INPUT_LENGTH = 52` → `(define-constant MAX_INPUT_LENGTH u52)`
-  - Maps: `map balances: {principal: int}` → `(define-map balances principal int)`
-  - Functions: `def name(param: type) -> type` → `(define-public/private ...)`
-  - Types: `str[N]`, `bool`, `int`, `Response[T, E]`
-  - Statements: `return`, `if`, `assert` → `(ok ...)`, `(if ...)`, `(asserts! ...)`
-  - Expressions: literals, `Ok()`, `Err()`, `len()`, equality checks
-- **Validation**: Basic syntax checking for Clarity output (e.g., balanced parentheses).
-- **Tech Stack**:
-  - Frontend: HTML, CSS (Bootstrap), JavaScript
-  - Editor: CodeMirror
-  - Parser: Chevrotain (via CDN)
-  - Transpiler: Custom JavaScript
+- **Enhanced Type System**:
+  - Proper fixed-length type handling with literals
+  - Full Response type support
+  - Map and data variable decorators
+  - Principal and other Clarity-specific types
 
-The tool successfully converts Python-like code to Clarity for constructs like those in Stacks' `base58-decode-to-stacks.clar`, making it usable for basic contract development.
+- **Improved Function Definitions**:
+  - `@public`, `@readonly`, and `@private` decorators
+  - Mandatory type hints
+  - Docstring support that converts to Clarity comments
+
+- **Better Error Handling**:
+  - Structured Response types
+  - Centralized error codes
+  - Type validation
+
+Example usage:
+```python
+from clarity.types import FixedString, Response, public
+
+@public
+def validate_address(input: FixedString(52)) -> Response[bool, int]:
+    """Validate a Stacks address format."""
+    if len(input) != 52:
+        return Response.err(ERR_INVALID_INPUT)
+    return Response.ok(True)
+```
 
 ## Future State
 We aim to evolve PyClarity Converter into the go-to tool for Stacks developers, with a focus on:
@@ -94,36 +100,21 @@ Future features will include:
 - **Localization**: Support multiple languages for global accessibility.
 
 ## Getting Started
-Follow these steps to set up PyClarity Converter locally:
 
-### Prerequisites
-- A modern web browser (Chrome, Firefox, Edge).
-- Python 3.x (for running a local server) or any static file server.
-
-### Installation
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-username/pyclarity-converter.git
-   cd pyclarity-converter
-   ```
-
-2. Serve the project using a static server:
-   ```bash
-   python3 -m http.server 8080
-   ```
-
-3. Open http://localhost:8080 in your browser.
-
-### Project Structure
+1. Import required types:
+```python
+from clarity.types import (
+    FixedString, 
+    Response, 
+    Principal, 
+    public
+)
 ```
-pyclarity-converter/
-├── index.html        # Main HTML file
-├── styles.css        # Custom styles
-├── app.js            # Main application logic
-├── parser.js         # Python-like syntax parser
-├── transpiler.js     # Python AST to Clarity converter
-└── README.md         # Project documentation
-```
+
+2. Define your contract using Python-like syntax with proper type annotations
+3. Use the converter to generate Clarity code
+
+See the [Syntax Guide](docs/syntax_guide.md) for detailed documentation.
 
 ## Usage
 

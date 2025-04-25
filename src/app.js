@@ -106,19 +106,45 @@ document.addEventListener('DOMContentLoaded', () => {
   // Sample code loader
   document.getElementById('sampleBtn').addEventListener('click', () => {
     const sampleCode = `
-MAX_INPUT_LENGTH = 52
 ERR_INVALID_INPUT = 100
 
-map balances: {principal: int}
+@map_type
+balances: Dict[Principal, uint]
 
-def validate_base58_input(input: str[52]) -> bool:
-    assert len(input) == MAX_INPUT_LENGTH, ERR_INVALID_INPUT
-    return True
+@public
+def validate_and_convert(address: FixedString(52)) -> Response[FixedString(41), int]:
+    """Validates a base58 address and converts it to Stacks format.
 
-def base58_to_stacks(address: str[52]) -> Response[str[41], int]:
-    if len(address) != MAX_INPUT_LENGTH:
+    Args:
+        address: Base58 encoded address (must be exactly 52 chars)
+    Returns:
+        Response with converted Stacks address or error code
+    """
+    if not _validate_address(address):
         return Err(ERR_INVALID_INPUT)
     return Ok("ST123...")
+
+@readonly
+def get_balance(owner: Principal) -> Response[uint, int]:
+    """Gets the balance for a given principal.
+
+    Args:
+        owner: Principal to check balance for
+    Returns:
+        Response with balance or error code
+    """
+    return Ok(1000)
+
+@private
+def _validate_address(address: FixedString(52)) -> bool:
+    """Internal helper to validate address format.
+
+    Args:
+        address: Address to validate
+    Returns:
+        True if valid, False otherwise
+    """
+    return len(address) == 52
 `.trim();
     pythonEditor.setValue(sampleCode);
     convert();
