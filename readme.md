@@ -4,6 +4,8 @@ Welcome to **PyClarity Converter**, a free, open-source tool that makes writing 
 
 This project is free for anyone to use, modify, or contribute to under the [MIT License](#license). We’re excited to see how you use it to build awesome things on Stacks! 🚀
 
+**Try it**: Open [PyClarity Converter](https://jordandevai.github.io/pyclarity-converter/) in your browser.
+
 ## Table of Contents
 - [What is PyClarity Converter?](#what-is-pyclarity-converter)
 - [Quick Start](#quick-start)
@@ -31,7 +33,7 @@ This tool is designed for the Stacks community—whether you’re building token
 
 Get started with PyClarity in just a few steps:
 
-1. **Visit the Tool**: Open [PyClarity Converter](https://your-hosted-url.com) in your browser (or run it locally, see [Development Setup](#development-setup)).
+1. **Visit the Tool**: Open [PyClarity Converter](https://jordandevai.github.io/pyclarity-converter/) in your browser (or run it locally, see [Development Setup](#development-setup)).
 2. **Write Python-like Code**: Use the left editor to write your contract. Try this example:
    ```python
    ERR_INVALID_INPUT = 100
