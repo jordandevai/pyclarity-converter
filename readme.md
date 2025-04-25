@@ -1,6 +1,6 @@
 # PyClarity Converter
 
-Welcome to **PyClarity Converter**, a free, open-source tool that makes writing smart contracts for the [Stacks blockchain](https://stacks.co) easier and more approachable! 😊 With PyClarity, you can write smart contracts in a familiar Python-like syntax and instantly convert them to [Clarity](https://docs.stacks.co/clarity), Stacks' native smart contract language. Whether you're new to Stacks or a seasoned developer, this tool is built for the community to simplify Clarity development and spark creativity in the Stacks ecosystem.
+**PyClarity Converter** is a free, open-source tool that makes writing smart contracts for the [Stacks blockchain](https://stacks.co) easier and more approachable! 😊 With PyClarity, you can write smart contracts in a familiar Python-like syntax and instantly convert them to [Clarity](https://docs.stacks.co/clarity), Stacks' native smart contract language. Whether you're new to Stacks or a seasoned developer, this tool is built for the community to simplify Clarity development and spark creativity in the Stacks ecosystem.
 
 This project is free for anyone to use, modify, or contribute to under the [MIT License](#license). We’re excited to see how you use it to build awesome things on Stacks! 🚀
 
