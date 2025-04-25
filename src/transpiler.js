@@ -323,6 +323,10 @@ export function transpile(cst, options = {}) {
         const expr = node.children.expression ? visitExpression(node.children.expression[0]) : '';
         console.log('[DEBUG] visitExpression: Err call:', expr);
         return `(err ${expr})`;
+      } else if (node.children.Len) {
+        const expr = node.children.expression ? visitExpression(node.children.expression[0]) : '';
+        console.log('[DEBUG] visitExpression: Len call:', expr);
+        return `(len ${expr})`;
       } else if (node.children.Identifier) {
         const funcName = transformIdentifier(node.children.Identifier[0].image);
         const expr = node.children.expression ? visitExpression(node.children.expression[0]) : '';

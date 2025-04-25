@@ -348,6 +348,7 @@ export class ClarityParser extends CstParser {
       $.OR([
         { ALT: () => $.CONSUME(Ok) },
         { ALT: () => $.CONSUME(Err) },
+        { ALT: () => $.CONSUME(Len) },
         { ALT: () => $.CONSUME(Identifier) }
       ]);
       $.CONSUME(LParen);
