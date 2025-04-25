@@ -315,21 +315,20 @@ export function transpile(cst, options = {}) {
       return 'null';
     }
     if (node.name === 'functionCall') {
+      // Get the expression (arguments) first
+      const expr = node.children.expression ? visitExpression(node.children.expression[0]) : '';
+
       if (node.children.Ok) {
-        const expr = node.children.expression ? visitExpression(node.children.expression[0]) : '';
         console.log('[DEBUG] visitExpression: Ok call:', expr);
         return `(ok ${expr})`;
       } else if (node.children.Err) {
-        const expr = node.children.expression ? visitExpression(node.children.expression[0]) : '';
         console.log('[DEBUG] visitExpression: Err call:', expr);
         return `(err ${expr})`;
       } else if (node.children.Len) {
-        const expr = node.children.expression ? visitExpression(node.children.expression[0]) : '';
         console.log('[DEBUG] visitExpression: Len call:', expr);
         return `(len ${expr})`;
       } else if (node.children.Identifier) {
         const funcName = transformIdentifier(node.children.Identifier[0].image);
-        const expr = node.children.expression ? visitExpression(node.children.expression[0]) : '';
         console.log('[DEBUG] visitExpression: Function call:', funcName, expr);
         return `(${funcName} ${expr})`;
       }
