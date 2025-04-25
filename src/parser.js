@@ -56,6 +56,11 @@ const FixedString = createToken({ name: 'FixedString', pattern: /FixedString/, l
 // Other tokens
 const Number = createToken({ name: 'Number', pattern: /\d+/ });
 const StringLiteral = createToken({ name: 'StringLiteral', pattern: /"[^"]*"/ });
+const Comment = createToken({
+    name: 'Comment',
+    pattern: /#[^\n\r]*/,
+    group: 'comments' // Store comments separately to avoid parsing conflicts
+});
 const Whitespace = createToken({
     name: 'Whitespace',
     pattern: /\s+/,
@@ -134,6 +139,9 @@ const allTokens = [
     Number,
     Identifier,  // Identifier must come after all keywords and types
 
+    // Comments before whitespace
+    Comment,
+
     // Whitespace last
     Whitespace,
     Newline
@@ -146,10 +154,16 @@ export class ClarityParser extends CstParser {
     super(allTokens);
     const $ = this;
 
+    // New comment rule
+    $.RULE('comment', () => {
+      $.CONSUME(Comment);
+    });
+
     $.RULE('program', () => {
       $.MANY(() => $.SUBRULE($.importStatement));
       $.MANY2(() => {
         $.OR([
+          { ALT: () => $.SUBRULE($.comment) },
           { ALT: () => $.SUBRULE($.constantDef) },
           { ALT: () => $.SUBRULE($.mapDef) },
           { ALT: () => $.SUBRULE($.functionDef) }
@@ -193,6 +207,7 @@ export class ClarityParser extends CstParser {
       $.CONSUME(Colon);
       $.SUBRULE($.docstring);
       $.SUBRULE($.body);
+      $.MANY(() => $.SUBRULE2($.comment)); // Allow trailing comments
     });
 
     $.RULE('docstring', () => {
@@ -245,7 +260,10 @@ export class ClarityParser extends CstParser {
 
     $.RULE('body', () => {
       $.AT_LEAST_ONE(() => {
-        $.SUBRULE($.statement);
+        $.OR([
+          { ALT: () => $.SUBRULE($.statement) },
+          { ALT: () => $.SUBRULE($.comment) }
+        ]);
       });
     });
 

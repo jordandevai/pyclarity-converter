@@ -71,7 +71,11 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error(`Parsing errors: ${parser.errors.map(e => e.message).join('; ')}`);
       }
 
-      const clarityCode = transpile(cst);
+      // Get the includeComments option from the UI
+      const includeComments = document.getElementById('includeCommentsCheckbox')?.checked ?? true;
+
+      // Transpile with options
+      const clarityCode = transpile(cst, { includeComments });
       const validationError = validateClarity(clarityCode);
       if (validationError) {
         throw new Error(validationError);
@@ -95,6 +99,11 @@ document.addEventListener('DOMContentLoaded', () => {
     convert();
   });
 
+  // Include comments checkbox
+  document.getElementById('includeCommentsCheckbox').addEventListener('change', () => {
+    convert();
+  });
+
   // Theme switcher
   document.getElementById('themeBtn').addEventListener('click', () => {
     document.body.classList.toggle('dark');
@@ -106,10 +115,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Sample code loader
   document.getElementById('sampleBtn').addEventListener('click', () => {
     const sampleCode = `
+# Module-level comment
 ERR_INVALID_INPUT = 100
 
 @map_type
-balances: Dict[Principal, uint]
+balances: Dict[Principal, uint]  # User balances map
 
 @public
 def validate_and_convert(address: FixedString(52)) -> Response[FixedString(41), int]:
@@ -120,9 +130,10 @@ def validate_and_convert(address: FixedString(52)) -> Response[FixedString(41), 
     Returns:
         Response with converted Stacks address or error code
     """
+    # Validate input length
     if not _validate_address(address):
         return Err(ERR_INVALID_INPUT)
-    return Ok("ST123...")
+    return Ok("ST123...")  # Return converted address
 
 @readonly
 def get_balance(owner: Principal) -> Response[uint, int]:
@@ -133,7 +144,7 @@ def get_balance(owner: Principal) -> Response[uint, int]:
     Returns:
         Response with balance or error code
     """
-    return Ok(1000)
+    return Ok(1000)  # Default balance for testing
 
 @private
 def _validate_address(address: FixedString(52)) -> bool:

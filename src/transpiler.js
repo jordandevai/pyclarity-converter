@@ -1,9 +1,37 @@
-export function transpile(cst) {
+export function transpile(cst, options = {}) {
+  const { includeComments = true } = options;
   let clarityCode = [];
+
+  /**
+   * Converts a Python comment or docstring to Clarity comment format.
+   * @param {Object} node - CST node (comment or docstring)
+   * @returns {string} Clarity comment with ;; prefix or empty string if comments are disabled
+   */
+  function visitComment(node) {
+    if (!includeComments || !node) return '';
+    let commentText;
+    if (node.name === 'docstring') {
+      const docstring = node.children?.StringLiteral?.[0]?.image || '';
+      commentText = docstring.slice(1, -1).trim(); // Remove quotes and trim
+    } else if (node.name === 'comment') {
+      commentText = node.children?.Comment?.[0]?.image?.slice(1).trim() || '';
+    } else {
+      return '';
+    }
+    if (!commentText) return '';
+    return commentText
+      .split('\n')
+      .map(line => `;; ${line.trim()}`)
+      .filter(line => line !== ';;')
+      .join('\n  ');
+  }
 
   function visit(node) {
     if (node.name === 'program') {
-      // Skip import statements in output
+      node.children.comment?.forEach(c => {
+        const comment = visitComment(c);
+        if (comment) clarityCode.push(comment);
+      });
       node.children.constantDef?.forEach(visit);
       node.children.mapDef?.forEach(visit);
       node.children.functionDef?.forEach(visit);
@@ -14,34 +42,41 @@ export function transpile(cst) {
     } else if (node.name === 'mapDef') {
       const name = node.children.Identifier[0].image;
       const mapType = node.children.MapType[0].image;
-      // Extract key and value types from the Dict syntax
       const mapTypeMatch = mapType.match(/Dict\[([^,]+),\s*([^\]]+)\]/);
+      let mapDef = '';
       if (mapTypeMatch) {
         const [_, keyType, valueType] = mapTypeMatch;
-        clarityCode.push(`(define-map ${name} ${keyType.trim()} ${valueType.trim()})`);
+        mapDef = `(define-map ${name} ${keyType.trim()} ${valueType.trim()})`;
       }
+      node.children.comment?.forEach(c => {
+        const comment = visitComment(c);
+        if (comment) mapDef += `\n${comment}`;
+      });
+      clarityCode.push(mapDef);
     } else if (node.name === 'functionDef') {
       const decorator = node.children.Public ? 'define-public' :
-                       node.children.Readonly ? 'define-read-only' :
-                       'define-private';
-      const name = node.children.Identifier[0].image;
+                        node.children.Readonly ? 'define-read-only' :
+                        'define-private';
+      const name = transformIdentifier(node.children.Identifier[0].image);
       const params = visitParameters(node.children.parameters[0]);
-      // We don't need to use returnType in the output since Clarity infers it
-      visitType(node.children.returnType[0]); // Just process it but don't use the result
+      visitType(node.children.returnType[0]);
       const body = visitBody(node.children.body[0]);
 
-      // Add docstring as comment if present
-      let docComment = "";
-      if (node.children.docstring?.[0]?.children?.StringLiteral) {
-        const docstring = node.children.docstring[0].children.StringLiteral[0].image;
-        // Remove quotes and split by lines
-        const docLines = docstring.slice(1, -1).split('\n');
-        // Format each line with proper comment syntax
-        docComment = docLines.map(line => `;; ${line.trim()}`).join('\n');
+      let functionDef = `(${decorator} (${name} ${params})`;
+      const docstring = visitComment(node.children.docstring?.[0]);
+      if (docstring) {
+        functionDef += `\n  ${docstring}`;
       }
-
-      // Build the function definition with optional docstring comments
-      const functionDef = `(${decorator} (${name} ${params})${docComment ? '\n  ' + docComment : ''}${body ? '\n  ' + body : ''})`;
+      if (body) {
+        functionDef += `\n  ${body}`;
+      }
+      node.children.comment?.forEach(c => {
+        const comment = visitComment(c);
+        if (comment) {
+          functionDef += `\n  ${comment}`;
+        }
+      });
+      functionDef += ')';
       clarityCode.push(functionDef);
     } else if (node.name === 'type') {
       if (node.children.FixedString) {
@@ -54,9 +89,8 @@ export function transpile(cst) {
           const [_, okType, errType] = typeMatch;
           return `(response ${okType.trim()} ${errType.trim()})`;
         }
-        return '(response bool int)'; // Default fallback
+        return '(response bool int)';
       }
-      // ... handle other types ...
     }
   }
 
@@ -69,33 +103,25 @@ export function transpile(cst) {
   }
 
   function visitType(node) {
-    if (node.children && node.children.fixedStringType) {
+    if (node.children?.fixedStringType) {
       return visitType(node.children.fixedStringType[0]);
     } else if (node.name === 'fixedStringType') {
       const size = node.children.Number[0].image;
       return `(string-ascii ${size})`;
-    } else if (node.children && node.children.StrType) {
+    } else if (node.children?.StrType) {
       return visitType(node.children.StrType[0]);
     } else if (node.name === 'StrType') {
       const length = node.image.match(/\d+/)[0];
       return `(string-ascii ${length})`;
-    } else if (node.children && node.children.BoolType) {
+    } else if (node.children?.BoolType || node.name === 'BoolType') {
       return 'bool';
-    } else if (node.name === 'BoolType') {
-      return 'bool';
-    } else if (node.children && node.children.IntType) {
+    } else if (node.children?.IntType || node.name === 'IntType') {
       return 'int';
-    } else if (node.name === 'IntType') {
-      return 'int';
-    } else if (node.children && node.children.UintType) {
+    } else if (node.children?.UintType || node.name === 'UintType') {
       return 'uint';
-    } else if (node.name === 'UintType') {
-      return 'uint';
-    } else if (node.children && node.children.PrincipalType) {
+    } else if (node.children?.PrincipalType || node.name === 'PrincipalType') {
       return 'principal';
-    } else if (node.name === 'PrincipalType') {
-      return 'principal';
-    } else if (node.children && node.children.ResponseType) {
+    } else if (node.children?.ResponseType) {
       return visitType(node.children.ResponseType[0]);
     } else if (node.name === 'ResponseType') {
       const responseType = node.image;
@@ -104,8 +130,8 @@ export function transpile(cst) {
         const [_, okType, errType] = typeMatch;
         return `(response ${okType.trim()} ${errType.trim()})`;
       }
-      return '(response bool int)'; // Default fallback
-    } else if (node.children && node.children.MapType) {
+      return '(response bool int)';
+    } else if (node.children?.MapType) {
       return visitType(node.children.MapType[0]);
     } else if (node.name === 'MapType') {
       const mapType = node.image;
@@ -116,97 +142,91 @@ export function transpile(cst) {
   }
 
   function visitBody(node) {
-    if (!node || !node.children || !node.children.statement) {
-      return '';
-    }
-
-    // Process each statement in the body
-    const statements = node.children.statement.map(stmt => visitStatement(stmt));
-    // Filter out empty statements and join with newlines
-    return statements.filter(s => s).join('\n      ');
+    if (!node || !node.children) return '';
+    const statements = [];
+    // Process comments and statements in order
+    const children = [...(node.children.comment || []), ...(node.children.statement || [])];
+    children.sort((a, b) => (a.startOffset || 0) - (b.startOffset || 0)); // Sort by position
+    children.forEach(child => {
+      if (child.name === 'comment') {
+        const comment = visitComment(child);
+        if (comment) statements.push(comment);
+      } else if (child.name === 'statement') {
+        const result = visitStatement(child);
+        if (result) statements.push(result);
+      }
+    });
+    return statements.filter(s => s).join('\n  ');
   }
 
   function visitStatement(node) {
     if (!node) return '';
-
-    if (node.children && node.children.returnStmt) {
+    if (node.children?.returnStmt) {
       return visitStatement(node.children.returnStmt[0]);
-    } else if (node.children && node.children.ifStmt) {
-      return visitStatement(node.children.ifStmt[0]);
-    } else if (node.children && node.children.assertStmt) {
-      return visitStatement(node.children.assertStmt[0]);
-    } else if (node.children && node.children.expression) {
-      return visitExpression(node.children.expression[0]);
-    } else if (node.name === 'returnStmt') {
-      // For return statements, we just return the expression directly
-      // since Clarity doesn't have explicit return statements
-      return visitExpression(node.children.expression[0]);
-    } else if (node.name === 'ifStmt') {
-      const condition = visitExpression(node.children.expression[0]);
-      const body = visitBody(node.children.body[0]);
-      if (body) {
-        return `(if ${condition}\n    (begin\n      ${body}\n    ))`;
-      } else {
-        return `(if ${condition} true)`; // Default if body is empty
+    } else if (node.children?.ifStmt) {
+      const ifStmt = node.children.ifStmt[0];
+      const condition = visitExpression(ifStmt.children.expression[0]);
+      const ifBody = visitBody(ifStmt.children.body[0]);
+      // Handle if-return pattern
+      const ifBodyStmts = ifStmt.children.body[0].children.statement || [];
+      if (ifBodyStmts.length === 1 && ifBodyStmts[0].children?.returnStmt) {
+        const thenExpr = visitExpression(ifBodyStmts[0].children.returnStmt[0].children.expression[0]);
+        // Look for a following return statement in the parent body
+        const parentStmts = node.parentCtx?.children?.statement || [];
+        const idx = parentStmts.indexOf(node);
+        if (idx + 1 < parentStmts.length && parentStmts[idx + 1].children?.returnStmt) {
+          const elseExpr = visitExpression(parentStmts[idx + 1].children.returnStmt[0].children.expression[0]);
+          return `(if ${condition}\n    ${thenExpr}\n    ${elseExpr})`;
+        }
       }
-    } else if (node.name === 'assertStmt') {
+      // Fallback: General if statement
+      return `(if ${condition}\n    (begin\n      ${ifBody}\n    )\n    (ok true))`;
+    } else if (node.children?.assertStmt) {
       const condition = visitExpression(node.children.expression[0]);
       const error = visitExpression(node.children.expression[1]);
       return `(asserts! ${condition} (err ${error}))`;
+    } else if (node.children?.expression) {
+      return visitExpression(node.children.expression[0]);
+    } else if (node.name === 'returnStmt') {
+      const expr = visitExpression(node.children.expression[0]);
+      return expr;
     } else if (node.name === 'expression') {
       return visitExpression(node);
     }
-
     return '';
+  }
+
+  function transformIdentifier(id) {
+    const transformed = id.replace(/^_+/, '').replace(/_/g, '-');
+    if (!transformed || transformed.startsWith('-')) {
+      throw new Error(`Invalid Clarity identifier: ${transformed}`);
+    }
+    return transformed;
   }
 
   function visitExpression(node) {
     if (!node) return '';
-
-    // Handle 'not' expressions
-    if (node.children && node.children.Not) {
+    if (node.children?.Not) {
       const expr = visitExpression(node.children.notExpr[0]);
       return `(not ${expr})`;
     }
-
-    // Handle comparison expressions
-    if (node.children && node.children.leftExpr) {
+    if (node.children?.leftExpr) {
       const left = visitExpression(node.children.leftExpr[0]);
-
-      // If there's a comparison operator
       if (node.children.EqualEqual || node.children.NotEqual ||
           node.children.GreaterThan || node.children.LessThan ||
           node.children.GreaterThanEqual || node.children.LessThanEqual) {
-
         const right = visitExpression(node.children.rightExpr[0]);
-
         let op;
-        if (node.children.EqualEqual) {
-          op = 'is-eq';
-        } else if (node.children.NotEqual) {
-          op = 'not (is-eq';
-        } else if (node.children.GreaterThan) {
-          op = '>';
-        } else if (node.children.LessThan) {
-          op = '<';
-        } else if (node.children.GreaterThanEqual) {
-          op = '>=';
-        } else if (node.children.LessThanEqual) {
-          op = '<=';
-        }
-
-        if (op === 'not (is-eq') {
-          return `(${op} ${left} ${right}))`;
-        } else {
-          return `(${op} ${left} ${right})`;
-        }
+        if (node.children.EqualEqual) op = 'is-eq';
+        else if (node.children.NotEqual) op = 'not (is-eq';
+        else if (node.children.GreaterThan) op = '>';
+        else if (node.children.LessThan) op = '<';
+        else if (node.children.GreaterThanEqual) op = '>=';
+        else if (node.children.LessThanEqual) op = '<=';
+        return op === 'not (is-eq' ? `(${op} ${left} ${right}))` : `(${op} ${left} ${right})`;
       }
-
-      // Just return the left expression if there's no comparison
       return left;
     }
-
-    // Handle atomic expressions
     if (node.name === 'atomicExpression') {
       if (node.children.literal) {
         return visitExpression(node.children.literal[0]);
@@ -215,30 +235,22 @@ export function transpile(cst) {
       } else if (node.children.functionCall) {
         return visitExpression(node.children.functionCall[0]);
       } else if (node.children.Identifier) {
-        return node.children.Identifier[0].image;
+        const id = transformIdentifier(node.children.Identifier[0].image);
+        return id;
       } else if (node.children.expression) {
         return visitExpression(node.children.expression[0]);
       }
       return '';
     }
-
-    // Handle literals
     if (node.name === 'literal') {
-      if (node.children.TrueLiteral) {
-        return 'true';
-      } else if (node.children.FalseLiteral) {
-        return 'false';
-      } else if (node.children.StringLiteral) {
-        // Keep the quotes for string literals
-        const stringLiteral = node.children.StringLiteral[0].image;
-        return stringLiteral;
-      } else if (node.children.Number) {
-        return `u${node.children.Number[0].image}`;
-      }
+      if (node.children.TrueLiteral) return 'true';
+      else if (node.children.FalseLiteral) return 'false';
+      else if (node.children.StringLiteral) {
+        const str = node.children.StringLiteral[0].image;
+        return str;
+      } else if (node.children.Number) return `u${node.children.Number[0].image}`;
       return 'null';
     }
-
-    // Handle function calls
     if (node.name === 'functionCall') {
       if (node.children.Ok) {
         const expr = node.children.expression ? visitExpression(node.children.expression[0]) : '';
@@ -247,37 +259,25 @@ export function transpile(cst) {
         const expr = node.children.expression ? visitExpression(node.children.expression[0]) : '';
         return `(err ${expr})`;
       } else if (node.children.Identifier) {
-        const funcName = node.children.Identifier[0].image;
+        const funcName = transformIdentifier(node.children.Identifier[0].image);
         const expr = node.children.expression ? visitExpression(node.children.expression[0]) : '';
         return `(${funcName} ${expr})`;
       }
     }
-
-    // Handle method calls
     if (node.name === 'methodCall') {
       const object = node.children.Identifier[0].image;
       const method = node.children.Identifier[1].image;
       const expr = node.children.expression ? visitExpression(node.children.expression[0]) : '';
-
-      // Handle Response.ok and Response.err methods
-      if (object === 'Response' && method === 'ok') {
-        return `(ok ${expr})`;
-      } else if (object === 'Response' && method === 'err') {
-        return `(err ${expr})`;
-      } else if (method === 'ok' || method === 'Ok') {
-        return `(ok ${expr})`;
-      } else if (method === 'err' || method === 'Err') {
-        return `(err ${expr})`;
-      }
-
+      if (object === 'Response' && method === 'ok') return `(ok ${expr})`;
+      else if (object === 'Response' && method === 'err') return `(err ${expr})`;
+      else if (method === 'ok' || method === 'Ok') return `(ok ${expr})`;
+      else if (method === 'err' || method === 'Err') return `(err ${expr})`;
       return `(${object}.${method} ${expr})`;
     }
-
-    // Handle identifiers
     if (node.name === 'Identifier') {
-      return node.children.Identifier[0].image;
+      const id = transformIdentifier(node.children.Identifier[0].image);
+      return id;
     }
-
     return '';
   }
 
