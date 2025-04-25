@@ -9,6 +9,7 @@ const userSettings = {
   autoConvert: localStorage.getItem('pyclarity-autoConvert') !== 'false',
   includeComments: localStorage.getItem('pyclarity-includeComments') !== 'false',
   bottomPanelCollapsed: localStorage.getItem('pyclarity-bottomPanelCollapsed') === 'true',
+  bottomPanelHeight: localStorage.getItem('pyclarity-bottomPanelHeight') || '200px',
   editorSplitPosition: localStorage.getItem('pyclarity-editorSplitPosition') || 50, // percentage
 
   // Save settings to localStorage
@@ -17,6 +18,7 @@ const userSettings = {
     localStorage.setItem('pyclarity-autoConvert', this.autoConvert);
     localStorage.setItem('pyclarity-includeComments', this.includeComments);
     localStorage.setItem('pyclarity-bottomPanelCollapsed', this.bottomPanelCollapsed);
+    localStorage.setItem('pyclarity-bottomPanelHeight', this.bottomPanelHeight);
     localStorage.setItem('pyclarity-editorSplitPosition', this.editorSplitPosition);
   }
 };
@@ -246,6 +248,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize bottom panel state
   const bottomPanel = document.querySelector('.bottom-panel');
+
+  // Apply saved height
+  if (userSettings.bottomPanelHeight) {
+    bottomPanel.style.height = userSettings.bottomPanelHeight;
+  }
+
+  // Apply collapsed state if saved
   if (userSettings.bottomPanelCollapsed) {
     bottomPanel.classList.add('collapsed');
   }
@@ -274,9 +283,83 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Set up bottom panel collapse/expand
   document.getElementById('collapseBottomPanel').addEventListener('click', () => {
+    // Don't collapse if maximized
+    if (bottomPanel.classList.contains('maximized')) {
+      return;
+    }
+
     bottomPanel.classList.toggle('collapsed');
     userSettings.bottomPanelCollapsed = bottomPanel.classList.contains('collapsed');
     userSettings.save();
+  });
+
+  // Set up bottom panel maximize/restore
+  document.getElementById('maximizeBottomPanel').addEventListener('click', () => {
+    bottomPanel.classList.toggle('maximized');
+
+    // Update icon based on state
+    const icon = document.querySelector('#maximizeBottomPanel i');
+    if (bottomPanel.classList.contains('maximized')) {
+      icon.classList.remove('bi-arrows-fullscreen');
+      icon.classList.add('bi-fullscreen-exit');
+
+      // Ensure panel is not collapsed when maximized
+      bottomPanel.classList.remove('collapsed');
+
+      // Switch to preprocessed tab when maximizing
+      document.querySelector('[data-target="preprocessedTab"]').click();
+    } else {
+      icon.classList.remove('bi-fullscreen-exit');
+      icon.classList.add('bi-arrows-fullscreen');
+    }
+
+    // Refresh CodeMirror instances to ensure proper sizing
+    pythonEditor.refresh();
+    clarityEditor.refresh();
+    preprocessedEditor.refresh();
+  });
+
+  // Set up bottom panel resize
+  const bottomPanelResizeHandle = document.getElementById('bottomPanelResizeHandle');
+  let isResizingBottomPanel = false;
+  let initialY, initialHeight;
+
+  bottomPanelResizeHandle.addEventListener('mousedown', (e) => {
+    // Don't allow resizing when maximized
+    if (bottomPanel.classList.contains('maximized')) {
+      return;
+    }
+
+    isResizingBottomPanel = true;
+    initialY = e.clientY;
+    initialHeight = bottomPanel.offsetHeight;
+    document.body.style.cursor = 'row-resize';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isResizingBottomPanel) return;
+
+    // Calculate new height (moving up decreases height)
+    const delta = initialY - e.clientY;
+    const newHeight = Math.max(40, Math.min(window.innerHeight * 0.8, initialHeight + delta));
+
+    // Apply the new height
+    bottomPanel.style.height = `${newHeight}px`;
+
+    // Refresh CodeMirror instances
+    preprocessedEditor.refresh();
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isResizingBottomPanel) {
+      isResizingBottomPanel = false;
+      document.body.style.cursor = '';
+
+      // Store the new height in a custom attribute for future reference
+      userSettings.bottomPanelHeight = bottomPanel.style.height;
+      userSettings.save();
+    }
   });
 
   // Set up resizable panels
@@ -324,6 +407,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Convert button handler
   document.getElementById('convertBtn').addEventListener('click', convert);
+
+  // Add keyboard shortcut for convert (Ctrl+Enter or Cmd+Enter)
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      convert();
+
+      // Flash the convert button to provide visual feedback
+      const convertBtn = document.getElementById('convertBtn');
+      convertBtn.classList.add('btn-flash');
+      setTimeout(() => {
+        convertBtn.classList.remove('btn-flash');
+      }, 300);
+    }
+  });
 
   // Auto-convert checkbox
   document.getElementById('autoConvertCheckbox').addEventListener('change', (e) => {
