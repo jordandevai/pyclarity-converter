@@ -1,32 +1,38 @@
 import { createToken, Lexer, CstParser } from 'chevrotain';
 
-// Define all tokens first
+// First define the Identifier token since it's used as a longer_alt
+const Identifier = createToken({ name: 'Identifier', pattern: /[a-zA-Z_][\w-]*/ });
+
+// Define all other tokens
 const EqualEqual = createToken({ name: 'EqualEqual', pattern: /==/ });
 const NotEqual = createToken({ name: 'NotEqual', pattern: /!=/ });
 const Equal = createToken({ name: 'Equal', pattern: /=/ });
 const Arrow = createToken({ name: 'Arrow', pattern: /->/ });
 
 // Keywords
-const Def = createToken({ name: 'Def', pattern: /def/ });
-const Map = createToken({ name: 'Map', pattern: /map/ });
-const Return = createToken({ name: 'Return', pattern: /return/ });
-const If = createToken({ name: 'If', pattern: /if/ });
-const Assert = createToken({ name: 'Assert', pattern: /assert/ });
-const Ok = createToken({ name: 'Ok', pattern: /Ok/ });
-const Err = createToken({ name: 'Err', pattern: /Err/ });
-const Len = createToken({ name: 'Len', pattern: /len/ });
-const TrueLiteral = createToken({ name: 'TrueLiteral', pattern: /True/ });
-const FalseLiteral = createToken({ name: 'FalseLiteral', pattern: /False/ });
+const Def = createToken({ name: 'Def', pattern: /def/, longer_alt: Identifier });
+const Map = createToken({ name: 'Map', pattern: /map/, longer_alt: Identifier });
+const Return = createToken({ name: 'Return', pattern: /return/, longer_alt: Identifier });
+const If = createToken({ name: 'If', pattern: /if/, longer_alt: Identifier });
+const Assert = createToken({ name: 'Assert', pattern: /assert/, longer_alt: Identifier });
+const Ok = createToken({ name: 'Ok', pattern: /Ok/, longer_alt: Identifier });
+const Err = createToken({ name: 'Err', pattern: /Err/, longer_alt: Identifier });
+const Len = createToken({ name: 'Len', pattern: /len/, longer_alt: Identifier });
+const TrueLiteral = createToken({ name: 'TrueLiteral', pattern: /True/, longer_alt: Identifier });
+const FalseLiteral = createToken({ name: 'FalseLiteral', pattern: /False/, longer_alt: Identifier });
 
 // Types
-const StrType = createToken({ name: 'StrType', pattern: /str\[\d+\]/ });
-const BoolType = createToken({ name: 'BoolType', pattern: /bool/ });
-const IntType = createToken({ name: 'IntType', pattern: /int/ });
-const ResponseType = createToken({ name: 'ResponseType', pattern: /Response\[[^\]]+\]/ });
+const StrType = createToken({ name: 'StrType', pattern: /str\[\d+\]/, longer_alt: Identifier });
+const BoolType = createToken({ name: 'BoolType', pattern: /bool/, longer_alt: Identifier });
+const IntType = createToken({ name: 'IntType', pattern: /int/, longer_alt: Identifier });
+const ResponseType = createToken({ 
+    name: 'ResponseType', 
+    pattern: /Response\[[^\]]+,[^\]]+\]/, 
+    longer_alt: Identifier 
+});
 const MapType = createToken({ name: 'MapType', pattern: /\{[^}]+\}/ });
 
-// General tokens (must come after keywords and types)
-const Identifier = createToken({ name: 'Identifier', pattern: /[a-zA-Z_][\w-]*/ });
+// Other tokens
 const Number = createToken({ name: 'Number', pattern: /\d+/ });
 const StringLiteral = createToken({ name: 'StringLiteral', pattern: /"[^"]*"/ });
 
@@ -37,8 +43,8 @@ const LBracket = createToken({ name: 'LBracket', pattern: /\[/ });
 const RBracket = createToken({ name: 'RBracket', pattern: /\]/ });
 const LBrace = createToken({ name: 'LBrace', pattern: /\{/ });
 const RBrace = createToken({ name: 'RBrace', pattern: /\}/ });
-const Colon = createToken({ name: 'Colon', pattern: /:/ });
 const Comma = createToken({ name: 'Comma', pattern: /,/ });
+const Colon = createToken({ name: 'Colon', pattern: /:/ });
 
 // Whitespace
 const Whitespace = createToken({ name: 'Whitespace', pattern: /\s+/, group: Lexer.SKIPPED });
@@ -81,7 +87,7 @@ const allTokens = [
     Colon,
     Comma,
     
-    // General tokens (must come after keywords and types)
+    // General tokens
     StringLiteral,
     Number,
     Identifier,  // Identifier must come after all keywords and types
@@ -148,7 +154,7 @@ export class ClarityParser extends CstParser {
         { ALT: () => $.CONSUME(StrType) },
         { ALT: () => $.CONSUME(BoolType) },
         { ALT: () => $.CONSUME(IntType) },
-        { ALT: () => $.SUBRULE($.responseType) },
+        { ALT: () => $.CONSUME(ResponseType) }, // Now handles Response[type1, type2] format
         { ALT: () => $.CONSUME(MapType) }
       ]);
     });
