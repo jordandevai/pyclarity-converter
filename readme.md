@@ -203,4 +203,4 @@ PyClarity Converter is licensed under the [MIT License](LICENSE). You’re free 
 
 Just include the original copyright and license notice in any copies. Let’s keep the open-source spirit alive! 🙌
 
-*Last Updated: April 25, 2025*
+*Last Updated: April 25, 2025* 
