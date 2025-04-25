@@ -1,5 +1,6 @@
 import { lexer, ClarityParser } from './parser.js';
 import { transpile } from './transpiler.js';
+import { preprocess } from './preprocessor.js';
 import './styles.css';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -36,6 +37,15 @@ document.addEventListener('DOMContentLoaded', () => {
     viewportMargin: Infinity
   });
 
+  // Initialize Preprocessed editor (read-only)
+  const preprocessedEditor = CodeMirror.fromTextArea(document.getElementById('preprocessedEditor'), {
+    mode: 'python',
+    lineNumbers: true,
+    theme: 'default',
+    readOnly: true,
+    viewportMargin: Infinity
+  });
+
   // Simple Clarity syntax validator
   function validateClarity(code) {
     let parenCount = 0;
@@ -55,11 +65,34 @@ document.addEventListener('DOMContentLoaded', () => {
     return null;
   }
 
-  // Conversion function
-  function convert() {
+  // Preprocess function - returns the preprocessed code but doesn't update UI status
+  function preprocessCode() {
     const pythonCode = pythonEditor.getValue();
     try {
-      const lexResult = lexer.tokenize(pythonCode);
+      // Apply preprocessing
+      const preprocessedCode = preprocess(pythonCode);
+
+      // Update preprocessed editor
+      preprocessedEditor.setValue(preprocessedCode);
+
+      return preprocessedCode;
+    } catch (e) {
+      console.error("Preprocessing error:", e);
+      return null;
+    }
+  }
+
+  // Conversion function - handles the entire pipeline
+  function convert() {
+    try {
+      // First preprocess the code
+      const preprocessedCode = preprocessCode();
+      if (!preprocessedCode) {
+        throw new Error("Failed to preprocess the code");
+      }
+
+      // Tokenize the preprocessed code
+      const lexResult = lexer.tokenize(preprocessedCode);
       if (lexResult.errors.length > 0) {
         throw new Error(`Lexing errors: ${lexResult.errors.map(e => e.message).join('; ')}`);
       }
@@ -94,8 +127,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Convert button handler
   document.getElementById('convertBtn').addEventListener('click', convert);
 
-  // Real-time conversion
+  // Real-time preprocessing when Python input changes
   pythonEditor.on('change', () => {
+    // First update the preprocessed view
+    preprocessCode();
+    // Then do the conversion
     convert();
   });
 
@@ -110,6 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const theme = document.body.classList.contains('dark') ? 'monokai' : 'default';
     pythonEditor.setOption('theme', theme);
     clarityEditor.setOption('theme', theme);
+    preprocessedEditor.setOption('theme', theme);
   });
 
   // Sample code loader
@@ -155,9 +192,11 @@ def _validate_address(address: FixedString(52)) -> bool:
     Returns:
         True if valid, False otherwise
     """
-    return len(address) == 52
-`.trim();
+    return len(address) == 52`;
+
+    // Set the sample code in the editor
     pythonEditor.setValue(sampleCode);
-    convert();
+
+    // The change event will trigger preprocessing and conversion automatically
   });
 });

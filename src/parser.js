@@ -58,8 +58,8 @@ const Number = createToken({ name: 'Number', pattern: /\d+/ });
 const StringLiteral = createToken({ name: 'StringLiteral', pattern: /"[^"]*"/ });
 const Comment = createToken({
     name: 'Comment',
-    pattern: /#[^\n\r]*/,
-    group: 'comments' // Store comments separately to avoid parsing conflicts
+    pattern: /#[^\n\r]*/
+    // Removed group: 'comments' to include in main token stream
 });
 const Whitespace = createToken({
     name: 'Whitespace',
@@ -272,8 +272,13 @@ export class ClarityParser extends CstParser {
         { ALT: () => $.SUBRULE($.returnStmt) },
         { ALT: () => $.SUBRULE($.ifStmt) },
         { ALT: () => $.SUBRULE($.assertStmt) },
-        { ALT: () => $.SUBRULE($.expression) }
+        { ALT: () => $.SUBRULE($.validExpression) } // New rule to filter expressions
       ]);
+    });
+
+    $.RULE('validExpression', () => {
+      // Simplified rule to avoid ambiguity
+      $.SUBRULE($.expression, { LABEL: 'expression' });
     });
 
     $.RULE('returnStmt', () => {
@@ -326,7 +331,7 @@ export class ClarityParser extends CstParser {
 
     $.RULE('atomicExpression', () => {
       $.OR([
-        { ALT: () => $.SUBRULE($.literal) },
+        { ALT: () => $.SUBRULE($.literal, { LABEL: 'literal' }) },
         { ALT: () => $.SUBRULE($.methodCall) },
         { ALT: () => $.SUBRULE($.functionCall) },
         { ALT: () => $.CONSUME(Identifier) },
@@ -367,10 +372,12 @@ export class ClarityParser extends CstParser {
       $.OR([
         { ALT: () => $.CONSUME(TrueLiteral) },
         { ALT: () => $.CONSUME(FalseLiteral) },
-        { ALT: () => $.CONSUME(StringLiteral) },
-        { ALT: () => $.CONSUME(Number) }
+        { ALT: () => $.CONSUME(Number) },
+        { ALT: () => $.CONSUME(StringLiteral) } // Add StringLiteral support
       ]);
     });
+
+
 
     // okExpr and errExpr rules removed as they're now handled by functionCall
 

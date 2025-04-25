@@ -8,25 +8,43 @@ export function transpile(cst, options = {}) {
    * @returns {string} Clarity comment with ;; prefix or empty string if comments are disabled
    */
   function visitComment(node) {
-    if (!includeComments || !node) return '';
-    let commentText;
-    if (node.name === 'docstring') {
-      const docstring = node.children?.StringLiteral?.[0]?.image || '';
-      commentText = docstring.slice(1, -1).trim(); // Remove quotes and trim
-    } else if (node.name === 'comment') {
-      commentText = node.children?.Comment?.[0]?.image?.slice(1).trim() || '';
-    } else {
+    if (!includeComments || !node) {
+      console.log('[DEBUG] visitComment: Skipping (comments disabled or node missing)');
       return '';
     }
-    if (!commentText) return '';
-    return commentText
+    console.log('[DEBUG] visitComment: Node name:', node.name, 'Children:', Object.keys(node.children || {}));
+    let commentText;
+    if (node.name === 'docstring') {
+      // Handle docstring as a direct StringLiteral or nested
+      const docstring = node.children?.StringLiteral?.[0]?.image || node.children?.StringLiteral?.image || '';
+      console.log('[DEBUG] visitComment: Raw docstring:', docstring);
+      commentText = docstring.replace(/^['"]{1,3}|['"]{1,3}$/g, '').trim(); // Remove single/triple quotes
+      console.log('[DEBUG] visitComment: Processed docstring:', commentText);
+    } else if (node.name === 'comment') {
+      const comment = node.children?.Comment?.[0]?.image || node.image || '';
+      console.log('[DEBUG] visitComment: Raw comment:', comment);
+      commentText = comment.replace(/^#/, '').trim(); // Remove # and trim
+      console.log('[DEBUG] visitComment: Processed comment:', commentText);
+    } else {
+      console.log('[DEBUG] visitComment: Invalid node type');
+      return '';
+    }
+    if (!commentText) {
+      console.log('[DEBUG] visitComment: Empty comment text');
+      return '';
+    }
+    const output = commentText
       .split('\n')
-      .map(line => `;; ${line.trim()}`)
-      .filter(line => line !== ';;')
+      .map(line => line.trim())
+      .filter(line => line)
+      .map(line => `;; ${line}`)
       .join('\n  ');
+    console.log('[DEBUG] visitComment: Output:', output);
+    return output;
   }
 
   function visit(node) {
+    console.log('[DEBUG] visit: Node name:', node.name);
     if (node.name === 'program') {
       node.children.comment?.forEach(c => {
         const comment = visitComment(c);
@@ -54,6 +72,7 @@ export function transpile(cst, options = {}) {
       });
       clarityCode.push(mapDef);
     } else if (node.name === 'functionDef') {
+      console.log('[DEBUG] visit: Processing functionDef, has docstring:', !!node.children?.docstring);
       const decorator = node.children.Public ? 'define-public' :
                         node.children.Readonly ? 'define-read-only' :
                         'define-private';
@@ -77,6 +96,7 @@ export function transpile(cst, options = {}) {
         }
       });
       functionDef += ')';
+      console.log('[DEBUG] visit: FunctionDef output:', functionDef);
       clarityCode.push(functionDef);
     } else if (node.name === 'type') {
       if (node.children.FixedString) {
@@ -142,57 +162,92 @@ export function transpile(cst, options = {}) {
   }
 
   function visitBody(node) {
-    if (!node || !node.children) return '';
+    if (!node || !node.children) {
+      console.log('[DEBUG] visitBody: Empty node');
+      return '';
+    }
+    console.log('[DEBUG] visitBody: Statements:', (node.children.statement || []).length, 'Comments:', (node.children.comment || []).length);
     const statements = [];
-    // Process comments and statements in order
     const children = [...(node.children.comment || []), ...(node.children.statement || [])];
-    children.sort((a, b) => (a.startOffset || 0) - (b.startOffset || 0)); // Sort by position
+    children.sort((a, b) => (a.startOffset || 0) - (b.startOffset || 0));
     children.forEach(child => {
       if (child.name === 'comment') {
         const comment = visitComment(child);
+        console.log('[DEBUG] visitBody: Processed comment:', comment);
         if (comment) statements.push(comment);
       } else if (child.name === 'statement') {
         const result = visitStatement(child);
-        if (result) statements.push(result);
+        console.log('[DEBUG] visitBody: Processed statement:', result);
+        if (result && result !== '""') statements.push(result);
       }
     });
-    return statements.filter(s => s).join('\n  ');
+    const output = statements.filter(s => s).join('\n  ');
+    console.log('[DEBUG] visitBody: Output:', output);
+    return output;
   }
 
   function visitStatement(node) {
-    if (!node) return '';
+    if (!node) {
+      console.log('[DEBUG] visitStatement: Empty node');
+      return '';
+    }
+    console.log('[DEBUG] visitStatement: Node children:', Object.keys(node.children || {}));
     if (node.children?.returnStmt) {
+      console.log('[DEBUG] visitStatement: Return statement');
       return visitStatement(node.children.returnStmt[0]);
     } else if (node.children?.ifStmt) {
+      console.log('[DEBUG] visitStatement: If statement');
       const ifStmt = node.children.ifStmt[0];
       const condition = visitExpression(ifStmt.children.expression[0]);
-      const ifBody = visitBody(ifStmt.children.body[0]);
-      // Handle if-return pattern
-      const ifBodyStmts = ifStmt.children.body[0].children.statement || [];
-      if (ifBodyStmts.length === 1 && ifBodyStmts[0].children?.returnStmt) {
+      console.log('[DEBUG] visitStatement: If condition:', condition);
+      const ifBody = ifStmt.children.body[0];
+      const ifBodyStmts = ifBody.children.statement || [];
+      console.log('[DEBUG] visitStatement: If body statements:', ifBodyStmts.length);
+      if (ifBodyStmts.length >= 1 && ifBodyStmts[0].children?.returnStmt) {
+        console.log('[DEBUG] visitStatement: Matched if-return pattern');
         const thenExpr = visitExpression(ifBodyStmts[0].children.returnStmt[0].children.expression[0]);
-        // Look for a following return statement in the parent body
-        const parentStmts = node.parentCtx?.children?.statement || [];
-        const idx = parentStmts.indexOf(node);
-        if (idx + 1 < parentStmts.length && parentStmts[idx + 1].children?.returnStmt) {
-          const elseExpr = visitExpression(parentStmts[idx + 1].children.returnStmt[0].children.expression[0]);
-          return `(if ${condition}\n    ${thenExpr}\n    ${elseExpr})`;
+        console.log('[DEBUG] visitStatement: Then expr:', thenExpr);
+        // Collect all statements after the ifStmt in the parent body
+        const parentBody = node.parentCtx?.children?.statement || [];
+        const currentIdx = parentBody.indexOf(node);
+        let elseExpr = '';
+        let foundElse = false;
+        for (let i = currentIdx + 1; i < parentBody.length; i++) {
+          if (parentBody[i].children?.returnStmt) {
+            elseExpr = visitExpression(parentBody[i].children.returnStmt[0].children.expression[0]);
+            console.log('[DEBUG] visitStatement: Else expr:', elseExpr);
+            foundElse = true;
+            break;
+          }
         }
+        if (foundElse) {
+          const ifBlock = `(if ${condition}\n    ${thenExpr}\n    ${elseExpr})`;
+          console.log('[DEBUG] visitStatement: If output:', ifBlock);
+          return ifBlock;
+        }
+        // Fallback: Only if no else branch is found
+        const ifBodyOutput = visitBody(ifBody);
+        console.log('[DEBUG] visitStatement: Fallback if body:', ifBodyOutput);
+        return `(if ${condition}\n    (begin\n      ${ifBodyOutput}\n    )\n    (ok true))`;
       }
-      // Fallback: General if statement
-      return `(if ${condition}\n    (begin\n      ${ifBody}\n    )\n    (ok true))`;
     } else if (node.children?.assertStmt) {
+      console.log('[DEBUG] visitStatement: Assert statement');
       const condition = visitExpression(node.children.expression[0]);
       const error = visitExpression(node.children.expression[1]);
       return `(asserts! ${condition} (err ${error}))`;
     } else if (node.children?.expression) {
+      console.log('[DEBUG] visitStatement: Expression');
       return visitExpression(node.children.expression[0]);
     } else if (node.name === 'returnStmt') {
+      console.log('[DEBUG] visitStatement: Return');
       const expr = visitExpression(node.children.expression[0]);
+      console.log('[DEBUG] visitStatement: Return expr:', expr);
       return expr;
     } else if (node.name === 'expression') {
+      console.log('[DEBUG] visitStatement: Direct expression');
       return visitExpression(node);
     }
+    console.log('[DEBUG] visitStatement: Empty');
     return '';
   }
 
@@ -205,12 +260,18 @@ export function transpile(cst, options = {}) {
   }
 
   function visitExpression(node) {
-    if (!node) return '';
+    if (!node) {
+      console.log('[DEBUG] visitExpression: Empty node');
+      return '';
+    }
+    console.log('[DEBUG] visitExpression: Node children:', Object.keys(node.children || {}));
     if (node.children?.Not) {
+      console.log('[DEBUG] visitExpression: Not');
       const expr = visitExpression(node.children.notExpr[0]);
       return `(not ${expr})`;
     }
     if (node.children?.leftExpr) {
+      console.log('[DEBUG] visitExpression: Comparison');
       const left = visitExpression(node.children.leftExpr[0]);
       if (node.children.EqualEqual || node.children.NotEqual ||
           node.children.GreaterThan || node.children.LessThan ||
@@ -236,6 +297,7 @@ export function transpile(cst, options = {}) {
         return visitExpression(node.children.functionCall[0]);
       } else if (node.children.Identifier) {
         const id = transformIdentifier(node.children.Identifier[0].image);
+        console.log('[DEBUG] visitExpression: Identifier:', id);
         return id;
       } else if (node.children.expression) {
         return visitExpression(node.children.expression[0]);
@@ -247,6 +309,7 @@ export function transpile(cst, options = {}) {
       else if (node.children.FalseLiteral) return 'false';
       else if (node.children.StringLiteral) {
         const str = node.children.StringLiteral[0].image;
+        console.log('[DEBUG] visitExpression: String literal:', str);
         return str;
       } else if (node.children.Number) return `u${node.children.Number[0].image}`;
       return 'null';
@@ -254,13 +317,16 @@ export function transpile(cst, options = {}) {
     if (node.name === 'functionCall') {
       if (node.children.Ok) {
         const expr = node.children.expression ? visitExpression(node.children.expression[0]) : '';
+        console.log('[DEBUG] visitExpression: Ok call:', expr);
         return `(ok ${expr})`;
       } else if (node.children.Err) {
         const expr = node.children.expression ? visitExpression(node.children.expression[0]) : '';
+        console.log('[DEBUG] visitExpression: Err call:', expr);
         return `(err ${expr})`;
       } else if (node.children.Identifier) {
         const funcName = transformIdentifier(node.children.Identifier[0].image);
         const expr = node.children.expression ? visitExpression(node.children.expression[0]) : '';
+        console.log('[DEBUG] visitExpression: Function call:', funcName, expr);
         return `(${funcName} ${expr})`;
       }
     }
@@ -276,11 +342,14 @@ export function transpile(cst, options = {}) {
     }
     if (node.name === 'Identifier') {
       const id = transformIdentifier(node.children.Identifier[0].image);
+      console.log('[DEBUG] visitExpression: Identifier:', id);
       return id;
     }
     return '';
   }
 
+  console.log('[DEBUG] transpile: Starting');
   visit(cst);
+  console.log('[DEBUG] transpile: Final output:', clarityCode.join('\n\n'));
   return clarityCode.join('\n\n');
 }

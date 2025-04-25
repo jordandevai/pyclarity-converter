@@ -21,7 +21,7 @@ body.dark .cm-editor {
   background-color: #282c34;
 }
 
-#pythonEditor, #clarityEditor {
+#pythonEditor, #clarityEditor, #preprocessedEditor {
   display: none;
 }
 
@@ -47,4 +47,31 @@ body.dark header {
 #errorConsole {
   min-height: 1.5rem;
   font-family: monospace;
+}
+
+/* Preprocessed code section */
+#preprocessedContainer {
+  display: block !important; /* Always show */
+}
+
+#preprocessedContainer .CodeMirror {
+  height: 200px;
+  font-size: 0.9rem;
+  border-color: #6c757d;
+}
+
+.card-header {
+  background-color: #f8f9fa;
+  transition: background-color 0.3s;
+}
+
+body.dark .card-header {
+  background-color: #343a40;
+  color: #f8f9fa;
+  border-color: #495057;
+}
+
+.form-check-input:checked {
+  background-color: #007bff;
+  border-color: #007bff;
 }
